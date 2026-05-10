@@ -1,0 +1,6 @@
+gymnasium==0.29.1
+numpy==1.26.4
+stable-baselines3==2.2.1
+python-dotenv==1.0.1
+pyyaml
+typeguard
