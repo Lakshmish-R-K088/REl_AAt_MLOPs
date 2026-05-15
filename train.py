@@ -1,7 +1,8 @@
 import gymnasium as gym
+import mlflow # NEW: Import MLflow
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
-from stable_baselines3.common.logger import configure  # NEW: Import the logger
+from stable_baselines3.common.logger import configure  
 from sim.visual_env import VisualDroneEnv
 import os
 
@@ -13,35 +14,60 @@ def main():
     check_env(env, warn=True)
     
     # MLOps: Define log directories
-    log_dir = "./experiments/logs/tensorboard/PPO_SAR_Grid_1/" # Best practice: create a specific folder per run
+    log_dir = "./experiments/logs/tensorboard/PPO_SAR_Grid_1/" 
     model_dir = "models/"
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
 
-    print("Building PPO Agent (policy_sar_v1)...")
-    model = PPO(
-        "MultiInputPolicy", 
-        env, 
-        verbose=1, 
-        learning_rate=0.0003,      # Slightly lowered to help it learn complex patterns safely
-        ent_coef=0.05,             # NEW: Forces the drone to be curious and explore the fog of war
-        batch_size=128,            # Processes memory in larger chunks
-    )
+    # ==========================================
+    # MLflow Setup & Configuration
+    # ==========================================
+    mlflow.set_tracking_uri("sqlite:///mlflow.db") # Saves data locally
+    mlflow.set_experiment("Drone_Search_And_Rescue") # Creates/Connects to your project workspace
 
-    # NEW: Configure the logger to output to terminal (stdout), CSV, and TensorBoard
-    new_logger = configure(log_dir, ["stdout", "csv", "tensorboard"])
-    model.set_logger(new_logger)
+    # Extract hyperparameters into variables so we can log them cleanly
+    train_steps = 2_000_000
+    learning_rate = 0.0003
+    ent_coef = 0.05
+    batch_size = 128
 
-    # Increased timesteps for a much harder environment
-    train_steps = 2_000_000  
-    print(f"Commencing Training ({train_steps:,} timesteps)... This may take a while!")
-    
-    # We removed tb_log_name here because the new_logger handles the directory now
-    model.learn(total_timesteps=train_steps) 
+    # Start the MLflow tracking run
+    with mlflow.start_run() as run:
+        print(f"Started MLflow Run ID: {run.info.run_id}")
+        
+        # 1. Log the parameters so you have a permanent record of this experiment's settings
+        mlflow.log_param("algorithm", "PPO")
+        mlflow.log_param("total_timesteps", train_steps)
+        mlflow.log_param("learning_rate", learning_rate)
+        mlflow.log_param("ent_coef", ent_coef)
+        mlflow.log_param("batch_size", batch_size)
 
-    print("Training Complete. Saving model...")
-    model.save(f"{model_dir}/policy_sar_ppo")
-    print("Model saved successfully to models/policy_sar_ppo.zip")
+        print("Building PPO Agent (policy_sar_v1)...")
+        model = PPO(
+            "MultiInputPolicy", 
+            env, 
+            verbose=1, 
+            learning_rate=learning_rate,      
+            ent_coef=ent_coef,             
+            batch_size=batch_size,            
+        )
+
+        # Attach your existing custom logger (outputs to stdout, csv, and tensorboard)
+        new_logger = configure(log_dir, ["stdout", "csv", "tensorboard"])
+        model.set_logger(new_logger)
+
+        print(f"Commencing Training ({train_steps:,} timesteps)... This may take a while!")
+        model.learn(total_timesteps=train_steps) 
+
+        # Save the model locally first
+        print("Training Complete. Saving model...")
+        model_filename = f"{model_dir}/policy_sar_ppo.zip"
+        model.save(f"{model_dir}/policy_sar_ppo")
+        print(f"Model saved successfully to {model_filename}")
+
+        # 2. Upload the saved model directly into MLflow's artifact registry
+        mlflow.log_artifact(model_filename)
+        print("Model binary successfully logged to MLflow as an artifact!")
 
     env.close()
 

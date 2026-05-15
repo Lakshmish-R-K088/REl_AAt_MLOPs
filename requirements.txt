@@ -6,3 +6,4 @@ pyyaml
 typeguard
 tensorboard
 pygame
+mlflow
