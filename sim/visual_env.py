@@ -11,7 +11,7 @@ class VisualDroneEnv(gym.Env):
         super().__init__()
         self.grid_size = 10
         self.window_size = 500  
-        self.max_ba+ttery = 30  # Hard time limit to force efficiency
+        self.max_battery = 30  # Hard time limit to force efficiency
         
         # Action Space: 0: Up, 1: Down, 2: Left, 3: Right
         self.action_space = spaces.Discrete(4)
